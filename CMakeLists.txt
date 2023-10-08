@@ -164,6 +164,10 @@ endif()
 #Stereo examples
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/Stereo)
 
+add_executable(stereo_video
+        Examples/Stereo/stereo_video.cc)
+target_link_libraries(stereo_video ${PROJECT_NAME})
+
 add_executable(stereo_kitti
         Examples/Stereo/stereo_kitti.cc)
 target_link_libraries(stereo_kitti ${PROJECT_NAME})
