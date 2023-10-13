@@ -37,6 +37,7 @@
 #include "KeyFrameDatabase.h"
 #include "ORBVocabulary.h"
 #include "Viewer.h"
+#include "GridMap.h"
 #include "ImuTypes.h"
 #include "Settings.h"
 
@@ -72,6 +73,7 @@ public:
 };
 
 class Viewer;
+class GridMap;
 class FrameDrawer;
 class MapDrawer;
 class Atlas;
@@ -227,6 +229,9 @@ private:
     // The viewer draws the map and the current camera pose. It uses Pangolin.
     Viewer* mpViewer;
 
+    // GridMap responsible for generating occupancy grid
+    GridMap* mpGridMap;
+
     FrameDrawer* mpFrameDrawer;
     MapDrawer* mpMapDrawer;
 
@@ -235,6 +240,7 @@ private:
     std::thread* mptLocalMapping;
     std::thread* mptLoopClosing;
     std::thread* mptViewer;
+    std::thread* mptGridMap;
 
     // Reset flag
     std::mutex mMutexReset;

@@ -31,6 +31,12 @@ using namespace std;
 void LoadImages(const string &strPathLeft, const string &strPathRight, const string &strPathTimes,
                 vector<string> &vstrImageLeft, vector<string> &vstrImageRight, vector<double> &vTimeStamps);
 
+// ./stereo_euroc /home/meciek/VSLAM-Object-Search/Vocabulary/ORBvoc.txt /home/meciek/VSLAM-Object-Search/Examples/Stereo/EuRoC.yaml /home/meciek/Downloads/V1_01_easy /home/meciek/VSLAM-Object-Search/Examples/Stereo/EuRoC_TimeStamps/V101.txt
+// ./stereo_euroc /home/meciek/VSLAM-Object-Search/Vocabulary/ORBvoc.txt /home/meciek/VSLAM-Object-Search/Examples/Stereo/EuRoC.yaml /home/meciek/Downloads/V1_02_medium /home/meciek/VSLAM-Object-Search/Examples/Stereo/EuRoC_TimeStamps/V102.txt
+// ./stereo_euroc /home/meciek/VSLAM-Object-Search/Vocabulary/ORBvoc.txt /home/meciek/VSLAM-Object-Search/Examples/Stereo/EuRoC.yaml /home/meciek/Downloads/MH_03_medium /home/meciek/VSLAM-Object-Search/Examples/Stereo/EuRoC_TimeStamps/MH03.txt
+
+
+
 int main(int argc, char **argv)
 {  
     if(argc < 5)
@@ -122,7 +128,7 @@ int main(int argc, char **argv)
 
             double tframe = vTimestampsCam[seq][ni];
 
-    #ifdef COMPILEDWITHC14
+    #ifdef COMPILEDWITHC11
             std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
     #else
             std::chrono::monotonic_clock::time_point t1 = std::chrono::monotonic_clock::now();
@@ -131,7 +137,7 @@ int main(int argc, char **argv)
             // Pass the images to the SLAM system
             SLAM.TrackStereo(imLeft,imRight,tframe, vector<ORB_SLAM3::IMU::Point>(), vstrImageLeft[seq][ni]);
 
-    #ifdef COMPILEDWITHC14
+    #ifdef COMPILEDWITHC11
             std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
     #else
             std::chrono::monotonic_clock::time_point t2 = std::chrono::monotonic_clock::now();
