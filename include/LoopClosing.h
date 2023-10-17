@@ -83,6 +83,8 @@ public:
     bool isFinished();
 
     Viewer* mpViewer;
+	bool loop_detected;
+
 
 #ifdef REGISTER_TIMES
 

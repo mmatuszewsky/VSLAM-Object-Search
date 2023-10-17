@@ -52,6 +52,7 @@ public:
     static cv::Mat toCvMat(const Eigen::Matrix<double,3,1> &m);
     static cv::Mat toCvMat(const Eigen::Matrix<float,3,1> &m);
     static cv::Mat toCvMat(const Eigen::Matrix<float,3,3> &m);
+    static cv::Mat toCvMat(const Sophus::SE3f &m);
 
     static cv::Mat toCvMat(const Eigen::MatrixXf &m);
     static cv::Mat toCvMat(const Eigen::MatrixXd &m);

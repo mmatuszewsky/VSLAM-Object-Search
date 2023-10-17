@@ -150,6 +150,13 @@ cv::Mat Converter::toCvMat(const Eigen::Matrix<float,3,1> &m)
     return cvMat.clone();
 }
 
+cv::Mat se3fToMat(const Sophus::SE3f &m) {
+    Eigen::Matrix4f eigenMatrix = m.matrix();
+    cv::Mat cvMatrix = Converter::toCvMat(eigenMatrix);
+    return cvMatrix;
+}
+
+
 cv::Mat Converter::toCvSE3(const Eigen::Matrix<double,3,3> &R, const Eigen::Matrix<double,3,1> &t)
 {
     cv::Mat cvMat = cv::Mat::eye(4,4,CV_32F);
