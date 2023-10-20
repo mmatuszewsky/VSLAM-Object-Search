@@ -37,9 +37,10 @@ endif()
 
 LIST(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules)
 
-find_package(OpenCV 4.4)
+SET(OpenCV_DIR )
+find_package(OpenCV 4.2)
    if(NOT OpenCV_FOUND)
-      message(FATAL_ERROR "OpenCV > 4.4 not found.")
+      message(FATAL_ERROR "OpenCV > 3 not found.")
    endif()
 
 MESSAGE("OPENCV VERSION:")
@@ -48,6 +49,14 @@ MESSAGE(${OpenCV_VERSION})
 find_package(Eigen3 3.1.0 REQUIRED)
 find_package(Pangolin REQUIRED)
 find_package(realsense2)
+find_package(PCL REQUIRED)
+
+find_package(catkin REQUIRED COMPONENTS
+  roscpp
+  visualization_msgs
+  cv_bridge
+  sensor_msgs
+)
 
 include_directories(
 ${PROJECT_SOURCE_DIR}
@@ -56,6 +65,8 @@ ${PROJECT_SOURCE_DIR}/include/CameraModels
 ${PROJECT_SOURCE_DIR}/Thirdparty/Sophus
 ${EIGEN3_INCLUDE_DIR}
 ${Pangolin_INCLUDE_DIRS}
+${catkin_INCLUDE_DIRS}
+${PCL_INCLUDE_DIRS}
 )
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
@@ -132,7 +143,14 @@ ${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so
 ${PROJECT_SOURCE_DIR}/Thirdparty/g2o/lib/libg2o.so
 -lboost_serialization
 -lcrypto
+
+${catkin_LIBRARIES}
 )
+
+# add_dependencies(your_target ${catkin_EXPORTED_TARGETS})
+# target_link_libraries(your_target
+   
+# )
 
 # If RealSense SDK is found the library is added and its examples compiled
 if(realsense2_FOUND)
@@ -169,6 +187,12 @@ endif()
 #             Examples/RGB-D-Inertial/rgbd_inertial_realsense_D435i.cc)
 #     target_link_libraries(rgbd_inertial_realsense_D435i ${PROJECT_NAME})
 # endif()
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/Stereo)
+add_executable(publisher_node Examples/Stereo/ROS-Stereo/ros_stereo_pub.cc)
+target_link_libraries(publisher_node ${PROJECT_NAME})
+
+add_executable(subscriber_node Examples/Stereo/ROS-Stereo/ros_stereo_sub.cc)
+target_link_libraries(subscriber_node ${PROJECT_NAME} ${PCL_LIBRARIES})
 
 #Stereo examples
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/Stereo)

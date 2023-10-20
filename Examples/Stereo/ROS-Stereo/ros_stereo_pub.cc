@@ -30,9 +30,8 @@
 #include "geometry_msgs/PoseStamped.h"
 #include "geometry_msgs/PoseArray.h"
 
-// #include <pcl/point_cloud.h>
-// #include <pcl/point_types.h>
-// #include <pcl_conversions/pcl_conversions.h>
+#include <pcl_ros/point_cloud.h>
+#include <pcl_conversions/pcl_conversions.h>
 
 #include<System.h>
 #include<Converter.h>
@@ -42,18 +41,22 @@ using namespace std;
 void LoadImages(const string &strPathLeft, const string &strPathRight, const string &strPathTimes,
                 vector<string> &vstrImageLeft, vector<string> &vstrImageRight, vector<double> &vTimeStamps);
 
-void Publish(ORB_SLAM3::System &SLAM, ros::Publisher &pub_pts_and_pose, ros::Publisher &pub_all_kf_and_pts, int frame_id);
+void Publish(ORB_SLAM3::System &SLAM, ros::Publisher &pub_pts_and_pose, ros::Publisher &pub_all_kf_and_pts, ros::Publisher &pub_cloud, int frame_id);
 
-// ./stereo_euroc /home/meciek/VSLAM-Object-Search/Vocabulary/ORBvoc.txt /home/meciek/VSLAM-Object-Search/Examples/Stereo/EuRoC.yaml /home/meciek/Downloads/MH_01_easy /home/meciek/VSLAM-Object-Search/Examples/Stereo/EuRoC_TimeStamps/MH01.txt
+// ./publisher_node /home/meciek/VSLAM-Object-Search/Vocabulary/ORBvoc.txt /home/meciek/VSLAM-Object-Search/Examples/Stereo/EuRoC.yaml /home/meciek/Downloads/MH_01_easy /home/meciek/VSLAM-Object-Search/Examples/Stereo/EuRoC_TimeStamps/MH01.txt
 
 
-bool read_from_topic = false, read_from_camera = false;
+bool read_from_topic = false; 
+bool read_from_camera = false;
 int all_pts_pub_gap = 0;
 bool pub_all_pts = false;
 int pub_count = 0;
 
 int main(int argc, char **argv)
 {  
+	ros::init(argc, argv, "Stereo");
+	ros::start();
+
     if(argc < 5)
     {
         cerr << endl << "Usage: ./stereo_euroc path_to_vocabulary path_to_settings path_to_sequence_folder_1 path_to_times_file_1 (path_to_image_folder_2 path_to_times_file_2 ... path_to_image_folder_N path_to_times_file_N) (trajectory_file_name)" << endl;
@@ -73,9 +76,9 @@ int main(int argc, char **argv)
 
     // Load all sequences:
     int seq;
-    vector< vector<string> > vstrImageLeft;
-    vector< vector<string> > vstrImageRight;
-    vector< vector<double> > vTimestampsCam;
+    vector<vector<string>> vstrImageLeft;
+    vector<vector<string>> vstrImageRight;
+    vector<vector<double>> vTimestampsCam;
     vector<int> nImages;
 
     vstrImageLeft.resize(num_seq);
@@ -112,12 +115,13 @@ int main(int argc, char **argv)
     ORB_SLAM3::System SLAM(argv[1],argv[2],ORB_SLAM3::System::STEREO, true);
 
     // ROS section
+	cout << endl << "Started publisher topic!" << endl;
 	ros::NodeHandle nodeHandler;
-	//ros::Publisher pub_cloud = nodeHandler.advertise<sensor_msgs::PointCloud2>("cloud_in", 1000);
+
+	ros::Publisher pub_cloud = nodeHandler.advertise<sensor_msgs::PointCloud2>("cloud_in", 1000);
 	ros::Publisher pub_pts_and_pose = nodeHandler.advertise<geometry_msgs::PoseArray>("pts_and_pose", 1000);
 	ros::Publisher pub_all_kf_and_pts = nodeHandler.advertise<geometry_msgs::PoseArray>("all_kf_and_pts", 1000);
-    ros::Rate loop_rate(5);
-
+    // ros::Rate loop_rate(1);
 
     cv::Mat imLeft, imRight;
     for (seq = 0; seq < num_seq; seq++)
@@ -157,8 +161,8 @@ int main(int argc, char **argv)
 
             std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
             double ttrack= std::chrono::duration_cast<std::chrono::duration<double> >(t2 - t1).count();
-
-			Publish(SLAM, pub_pts_and_pose, pub_all_kf_and_pts, ni);
+			
+			Publish(SLAM, pub_pts_and_pose, pub_all_kf_and_pts, pub_cloud, ni);
 
             vTimesTrack[ni]=ttrack;
             // Wait to load the next frame
@@ -171,7 +175,7 @@ int main(int argc, char **argv)
                 usleep((T-ttrack)*1e6); // 1e6
 
             ros::spinOnce();
-			loop_rate.sleep();
+			// loop_rate.sleep();
 			if (!ros::ok()){ break; }
         }
 
@@ -190,7 +194,7 @@ int main(int argc, char **argv)
 }
 
 void Publish(ORB_SLAM3::System &SLAM, ros::Publisher &pub_pts_and_pose,
-	ros::Publisher &pub_all_kf_and_pts, int frame_id) {
+	ros::Publisher &pub_all_kf_and_pts, ros::Publisher &pub_cloud, int frame_id) {
 
 	if (all_pts_pub_gap > 0 && pub_count >= all_pts_pub_gap) {
 		pub_all_pts = true;
@@ -243,7 +247,7 @@ void Publish(ORB_SLAM3::System &SLAM, ros::Publisher &pub_pts_and_pose,
 				}
 				geometry_msgs::Pose curr_pt;
 				//printf("wp size: %d, %d\n", wp.rows, wp.cols);
-				//pcl_cloud->push_back(pcl::PointXYZ(wp.at<float>(0), wp.at<float>(1), wp.at<float>(2)));
+				// pcl_cloud->push_back(pcl::PointXYZ(wp.at<float>(0), wp.at<float>(1), wp.at<float>(2)));
 				curr_pt.position.x = pt_pose.at<float>(0);
 				curr_pt.position.y = pt_pose.at<float>(1);
 				curr_pt.position.z = pt_pose.at<float>(2);
@@ -298,7 +302,7 @@ void Publish(ORB_SLAM3::System &SLAM, ros::Publisher &pub_pts_and_pose,
 
 		//printf("n_map_pts: %d\n", n_map_pts);
 
-		//pcl::PointCloud<pcl::PointXYZ>::Ptr pcl_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+		pcl::PointCloud<pcl::PointXYZ>::Ptr pcl_cloud(new pcl::PointCloud<pcl::PointXYZ>);
 
 		geometry_msgs::PoseArray pt_array;
 		//pt_array.poses.resize(n_map_pts + 1);
@@ -332,22 +336,23 @@ void Publish(ORB_SLAM3::System &SLAM, ros::Publisher &pub_pts_and_pose,
 			}
 			geometry_msgs::Pose curr_pt;
 			//printf("wp size: %d, %d\n", wp.rows, wp.cols);
-			//pcl_cloud->push_back(pcl::PointXYZ(wp.at<float>(0), wp.at<float>(1), wp.at<float>(2)));
+			pcl_cloud->push_back(pcl::PointXYZ(wp.at<float>(0), wp.at<float>(1), wp.at<float>(2)));
 			curr_pt.position.x = wp.at<float>(0);
 			curr_pt.position.y = wp.at<float>(1);
 			curr_pt.position.z = wp.at<float>(2);
 			pt_array.poses.push_back(curr_pt);
 			//printf("Done getting map point %d\n", pt_id);
 		}
-		//sensor_msgs::PointCloud2 ros_cloud;
-		//pcl::toROSMsg(*pcl_cloud, ros_cloud);
-		//ros_cloud.header.frame_id = "1";
-		//ros_cloud.header.seq = ni;
+
+		sensor_msgs::PointCloud2 ros_cloud;
+		pcl::toROSMsg(*pcl_cloud, ros_cloud);
+		ros_cloud.header.frame_id = "1";
+		ros_cloud.header.seq = frame_id + 1;
 
 		//printf("valid map pts: %lu\n", pt_array.poses.size()-1);
 
 		//printf("ros_cloud size: %d x %d\n", ros_cloud.height, ros_cloud.width);
-		//pub_cloud.publish(ros_cloud);
+		pub_cloud.publish(ros_cloud);
 		pt_array.header.frame_id = "1";
 		pt_array.header.seq = frame_id + 1;
 		pub_pts_and_pose.publish(pt_array);

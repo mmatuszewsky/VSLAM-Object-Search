@@ -33,6 +33,12 @@ void LoadImages(const string &strPathLeft, const string &strPathRight, const str
 
 // ./stereo_euroc /home/meciek/VSLAM-Object-Search/Vocabulary/ORBvoc.txt /home/meciek/VSLAM-Object-Search/Examples/Stereo/EuRoC.yaml /home/meciek/Downloads/MH_01_easy /home/meciek/VSLAM-Object-Search/Examples/Stereo/EuRoC_TimeStamps/MH01.txt
 
+// ./stereo_euroc /home/meciek/VSLAM-Object-Search/Vocabulary/ORBvoc.txt /home/meciek/VSLAM-Object-Search/Examples/Stereo/EuRoC.yaml /home/meciek/Downloads/V1_01_easy /home/meciek/VSLAM-Object-Search/Examples/Stereo/EuRoC_TimeStamps/V101.txt
+
+// ./publisher_node /home/meciek/VSLAM-Object-Search/Vocabulary/ORBvoc.txt /home/meciek/VSLAM-Object-Search/Examples/Stereo/EuRoC.yaml /home/meciek/Downloads/V1_01_easy /home/meciek/VSLAM-Object-Search/Examples/Stereo/EuRoC_TimeStamps/V101.txt
+
+
+
 int main(int argc, char **argv)
 {  
     if(argc < 5)
