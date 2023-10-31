@@ -23,12 +23,18 @@
 #include <Converter.h>
 
 // parameters
-float scale_factor = 10;
+
+// higher value = better resolution of a map
+float scale_factor = 20;
+
 float resize_factor = 5;
+
 float cloud_max_x = 12;
 float cloud_min_x = -12.0;
+
 float cloud_max_z = 16;
 float cloud_min_z = -5;
+
 float free_thresh = 0.55;
 float occupied_thresh = 0.50;
 float thresh_diff = 0.01;
@@ -57,8 +63,8 @@ using namespace std;
 
 void updateGridMap(const geometry_msgs::PoseArray::ConstPtr& pts_and_pose);
 void resetGridMap(const geometry_msgs::PoseArray::ConstPtr& pts_and_pose);
-void cloudCallback(const sensor_msgs::PointCloud2::ConstPtr& pt_cloud);
-void kfCallback(const geometry_msgs::PoseStamped::ConstPtr& camera_pose);
+// void cloudCallback(const sensor_msgs::PointCloud2::ConstPtr& pt_cloud);
+// void kfCallback(const geometry_msgs::PoseStamped::ConstPtr& camera_pose);
 void saveMap(unsigned int id = 0);
 void ptCallback(const geometry_msgs::PoseArray::ConstPtr& pts_and_pose);
 void loopClosingCallback(const geometry_msgs::PoseArray::ConstPtr& all_kf_and_pts);
@@ -86,7 +92,8 @@ int main(int argc, char **argv){
 	grid_min_z = cloud_min_z*scale_factor;
 	printf("grid_max: %f, %f\t grid_min: %f, %f\n", grid_max_x, grid_max_z, grid_min_x, grid_min_z);
 
-	double grid_res_x = grid_max_x - grid_min_x, grid_res_z = grid_max_z - grid_min_z;
+	double grid_res_x = grid_max_x - grid_min_x; 
+	double grid_res_z = grid_max_z - grid_min_z;
 
 	h = grid_res_z;
 	w = grid_res_x;
@@ -124,27 +131,13 @@ int main(int argc, char **argv){
 	ros::Subscriber sub_all_kf_and_pts = nodeHandler.subscribe("all_kf_and_pts", 1000, loopClosingCallback);
 	pub_grid_map = nodeHandler.advertise<nav_msgs::OccupancyGrid>("grid_map", 1000);
 
-
-	//ros::Subscriber sub_cloud = nodeHandler.subscribe("cloud_in", 1000, cloudCallback);
-	//ros::Subscriber sub_kf = nodeHandler.subscribe("camera_pose", 1000, kfCallback);
-	//ros::Subscriber sub = nodeHandler.subscribe("/camera/image_raw", 1, &ImageGrabber::GrabImage, &igb);
-
 	ros::spin();
 	ros::shutdown();
 	cv::destroyAllWindows();
-	// saveMap();
-
 	return 0;
 }
 
-void cloudCallback(const sensor_msgs::PointCloud2::ConstPtr& pt_cloud){
-	ROS_INFO("I heard: [%s]{%d}", pt_cloud->header.frame_id.c_str(),
-		pt_cloud->header.seq);
-}
-void kfCallback(const geometry_msgs::PoseStamped::ConstPtr& camera_pose){
-	ROS_INFO("I heard: [%s]{%d}", camera_pose->header.frame_id.c_str(),
-		camera_pose->header.seq);
-}
+
 void saveMap(unsigned int id) {
 	printf("saving maps with id: %u\n", id);
 	mkdir("results", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
@@ -160,24 +153,8 @@ void saveMap(unsigned int id) {
 	}
 
 }
-void ptCallback(const geometry_msgs::PoseArray::ConstPtr& pts_and_pose){
-	//ROS_INFO("Received points and pose: [%s]{%d}", pts_and_pose->header.frame_id.c_str(),
-	//	pts_and_pose->header.seq);
-	//if (pts_and_pose->header.seq==0) {
-	//	cv::destroyAllWindows();
-	//	saveMap();
-	//	printf("Received exit message\n");
-	//	ros::shutdown();
-	//	exit(0);
-	//}
-//	if (!got_start_time) {
-//#ifdef COMPILEDWITHC11
-//		start_time = std::chrono::steady_clock::now();
-//#else
-//		start_time = std::chrono::monotonic_clock::now();
-//#endif
-//		got_start_time = true;
-//	}
+
+void ptCallback(const geometry_msgs::PoseArray::ConstPtr& pts_and_pose) {
 
 	if (loop_closure_being_processed){ return; }
 
@@ -186,21 +163,14 @@ void ptCallback(const geometry_msgs::PoseArray::ConstPtr& pts_and_pose){
 	grid_map_msg.info.map_load_time = ros::Time::now();
 	pub_grid_map.publish(grid_map_msg);
 }
-void loopClosingCallback(const geometry_msgs::PoseArray::ConstPtr& all_kf_and_pts){
-	//ROS_INFO("Received points and pose: [%s]{%d}", pts_and_pose->header.frame_id.c_str(),
-	//	pts_and_pose->header.seq);
-	//if (all_kf_and_pts->header.seq == 0) {
-	//	cv::destroyAllWindows();
-	//	saveMap();
-	//	ros::shutdown();
-	//	exit(0);
-	//}
+
+void loopClosingCallback(const geometry_msgs::PoseArray::ConstPtr& all_kf_and_pts) {
 	loop_closure_being_processed = true;
 	resetGridMap(all_kf_and_pts);
 	loop_closure_being_processed = false;
 }
 
-void getMixMax(const geometry_msgs::PoseArray::ConstPtr& pts_and_pose,
+void getMinMax(const geometry_msgs::PoseArray::ConstPtr& pts_and_pose,
 	geometry_msgs::Point& min_pt, geometry_msgs::Point& max_pt) {
 
 	min_pt.x = min_pt.y = min_pt.z = std::numeric_limits<double>::infinity();
@@ -216,6 +186,7 @@ void getMixMax(const geometry_msgs::PoseArray::ConstPtr& pts_and_pose,
 		if (curr_pt.z > max_pt.z) { max_pt.z = curr_pt.z; }
 	}
 }
+
 void processMapPt(const geometry_msgs::Point &curr_pt, cv::Mat &occupied, 
 	cv::Mat &visited, cv::Mat &pt_mask, int kf_pos_grid_x, int kf_pos_grid_z) {
 	float pt_pos_x = curr_pt.x*scale_factor;
@@ -312,12 +283,13 @@ void updateGridMap(const geometry_msgs::PoseArray::ConstPtr& pts_and_pose){
 	//printf("max_pt: %f, %f\t min_pt: %f, %f\n", max_pt.x*scale_factor, max_pt.z*scale_factor, 
 	//	min_pt.x*scale_factor, min_pt.z*scale_factor);
 
-	//double grid_res_x = max_pt.x - min_pt.x, grid_res_z = max_pt.z - min_pt.z;
+	// double grid_res_x = max_pt.x - min_pt.x, grid_res_z = max_pt.z - min_pt.z;
 
-	//printf("Received frame %u \n", pts_and_pose->header.seq);
-
+	// printf("Received frame %u \n", pts_and_pose->header.seq);
+	
+	// first pose is camera_pose
 	const geometry_msgs::Point &kf_location = pts_and_pose->poses[0].position;
-	//const geometry_msgs::Quaternion &kf_orientation = pts_and_pose->poses[0].orientation;
+	// const geometry_msgs::Quaternion &kf_orientation = pts_and_pose->poses[0].orientation;
 
 	kf_pos_x = kf_location.x*scale_factor;
 	kf_pos_z = kf_location.z*scale_factor;
@@ -330,13 +302,14 @@ void updateGridMap(const geometry_msgs::PoseArray::ConstPtr& pts_and_pose){
 
 	if (kf_pos_grid_z < 0 || kf_pos_grid_z >= h)
 		return;
+	
 	++n_kf_received;
 	unsigned int n_pts = pts_and_pose->poses.size() - 1;
 	//printf("Processing key frame %u and %u points\n",n_kf_received, n_pts);
 	processMapPts(pts_and_pose->poses, n_pts, 1, kf_pos_grid_x, kf_pos_grid_z);
 
 	getGridMap();
-	showGridMap(pts_and_pose->header.seq);
+	// showGridMap(pts_and_pose->header.seq);
 	//cout << endl << "Grid map saved!" << endl;
 }
 
@@ -427,7 +400,7 @@ void getGridMap() {
 
 void showGridMap(unsigned int id) {
 	// cv::imshow("grid_map_msg", cv::Mat(h, w, CV_8SC1, (char*)(grid_map_msg.data.data())));
-	cv::imshow("grid_map_thresh_resized", grid_map_thresh_resized);
+	// cv::imshow("grid_map_thresh_resized", grid_map_thresh_resized);
 	//cv::imshow("grid_map", grid_map);
 	int key = cv::waitKey(1) % 256;
 	if (key == 27) {

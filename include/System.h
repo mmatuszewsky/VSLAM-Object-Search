@@ -37,7 +37,6 @@
 #include "KeyFrameDatabase.h"
 #include "ORBVocabulary.h"
 #include "Viewer.h"
-#include "GridMap.h"
 #include "ImuTypes.h"
 #include "Settings.h"
 

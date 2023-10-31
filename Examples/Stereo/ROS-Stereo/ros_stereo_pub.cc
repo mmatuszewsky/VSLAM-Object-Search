@@ -21,6 +21,9 @@
 #include <fstream>
 #include <iomanip>
 #include <chrono>
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include <opencv2/core/core.hpp>
 
@@ -41,152 +44,120 @@ using namespace std;
 void LoadImages(const string &strPathLeft, const string &strPathRight, const string &strPathTimes,
                 vector<string> &vstrImageLeft, vector<string> &vstrImageRight, vector<double> &vTimeStamps);
 
-void Publish(ORB_SLAM3::System &SLAM, ros::Publisher &pub_pts_and_pose, ros::Publisher &pub_all_kf_and_pts, ros::Publisher &pub_cloud, int frame_id);
+void LoadImages(const string &strPathToSequence, vector<string> &vstrImageLeft,
+                vector<string> &vstrImageRight, vector<double> &vTimestamps);
 
-// ./publisher_node /home/meciek/VSLAM-Object-Search/Vocabulary/ORBvoc.txt /home/meciek/VSLAM-Object-Search/Examples/Stereo/EuRoC.yaml /home/meciek/Downloads/MH_01_easy /home/meciek/VSLAM-Object-Search/Examples/Stereo/EuRoC_TimeStamps/MH01.txt
+void Publish(ORB_SLAM3::System &SLAM, ros::Publisher &pub_pts_and_pose, ros::Publisher &pub_all_kf_and_pts, 
+	ros::Publisher &pub_cloud, ros::Publisher &pub_camera_pose, int frame_id);
 
+// ./publisher_node /home/meciek/VSLAM-Object-Search/Vocabulary/ORBvoc.txt /home/meciek/VSLAM-Object-Search/Examples/Stereo/EuRoC.yaml /home/meciek/Downloads/V1_01_easy /home/meciek/VSLAM-Object-Search/Examples/Stereo/EuRoC_TimeStamps/V101.txt
+
+// ./publisher_node /home/meciek/VSLAM-Object-Search/Vocabulary/ORBvoc.txt /home/meciek/VSLAM-Object-Search/Examples/Stereo/KITTI00-02.yaml /home/meciek/Downloads/kitti/01
 
 bool read_from_topic = false; 
 bool read_from_camera = false;
-int all_pts_pub_gap = 0;
 bool pub_all_pts = false;
 int pub_count = 0;
+int all_pts_pub_gap = 0;
+
 
 int main(int argc, char **argv)
 {  
+    cout << "Number of args: " << argc << endl;
 	ros::init(argc, argv, "Stereo");
 	ros::start();
 
-    if(argc < 5)
+    if(argc < 4 && argc > 6)
     {
-        cerr << endl << "Usage: ./stereo_euroc path_to_vocabulary path_to_settings path_to_sequence_folder_1 path_to_times_file_1 (path_to_image_folder_2 path_to_times_file_2 ... path_to_image_folder_N path_to_times_file_N) (trajectory_file_name)" << endl;
-
+        cerr << endl << "Wrong command!" << endl;
         return 1;
     }
 
-    const int num_seq = (argc-3)/2;
-    cout << "num_seq = " << num_seq << endl;
-    bool bFileName= (((argc-3) % 2) == 1);
-    string file_name;
-    if (bFileName)
-    {
-        file_name = string(argv[argc-1]);
-        cout << "file name: " << file_name << endl;
+    vector<string> vstrImageLeft;
+    vector<string> vstrImageRight;
+    vector<double> vTimestamps;
+
+    if (argc == 4) {
+        LoadImages(string(argv[3]), vstrImageLeft, vstrImageRight, vTimestamps);
     }
-
-    // Load all sequences:
-    int seq;
-    vector<vector<string>> vstrImageLeft;
-    vector<vector<string>> vstrImageRight;
-    vector<vector<double>> vTimestampsCam;
-    vector<int> nImages;
-
-    vstrImageLeft.resize(num_seq);
-    vstrImageRight.resize(num_seq);
-    vTimestampsCam.resize(num_seq);
-    nImages.resize(num_seq);
-
-    int tot_images = 0;
-    for (seq = 0; seq<num_seq; seq++)
-    {
-        cout << "Loading images for sequence " << seq << "...";
-
-        string pathSeq(argv[(2*seq) + 3]);
-        string pathTimeStamps(argv[(2*seq) + 4]);
+    else {
+        string pathSeq(argv[3]);
+        string pathTimeStamps(argv[4]);
 
         string pathCam0 = pathSeq + "/mav0/cam0/data";
         string pathCam1 = pathSeq + "/mav0/cam1/data";
 
-        LoadImages(pathCam0, pathCam1, pathTimeStamps, vstrImageLeft[seq], vstrImageRight[seq], vTimestampsCam[seq]);
-        cout << "LOADED!" << endl;
-
-        nImages[seq] = vstrImageLeft[seq].size();
-        tot_images += nImages[seq];
+        LoadImages(pathCam0, pathCam1, pathTimeStamps, vstrImageLeft, vstrImageRight, vTimestamps);
     }
+    const int nImages = vstrImageLeft.size();
 
-    // Vector for tracking time statistics
-    vector<float> vTimesTrack;
-    vTimesTrack.resize(tot_images);
-
+    cout << "LOADED!" << endl;
     cout << endl << "-------" << endl;
     cout.precision(17);
 
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
-    ORB_SLAM3::System SLAM(argv[1],argv[2],ORB_SLAM3::System::STEREO, true);
+    ORB_SLAM3::System SLAM(argv[1], argv[2], ORB_SLAM3::System::STEREO, true);
 
     // ROS section
-	cout << endl << "Started publisher topic!" << endl;
 	ros::NodeHandle nodeHandler;
-
 	ros::Publisher pub_cloud = nodeHandler.advertise<sensor_msgs::PointCloud2>("cloud_in", 1000);
 	ros::Publisher pub_pts_and_pose = nodeHandler.advertise<geometry_msgs::PoseArray>("pts_and_pose", 1000);
 	ros::Publisher pub_all_kf_and_pts = nodeHandler.advertise<geometry_msgs::PoseArray>("all_kf_and_pts", 1000);
+	ros::Publisher pub_camera_pose = nodeHandler.advertise<geometry_msgs::Pose>("camera_pose", 1000);
+	cout << endl << "Started publisher topics!" << endl;
+
     // ros::Rate loop_rate(1);
 
     cv::Mat imLeft, imRight;
-    for (seq = 0; seq < num_seq; seq++)
+    double t_resize = 0;
+    double t_rect = 0;
+    double t_track = 0;
+    int num_rect = 0;
+    
+    for (int ni = 0; ni < nImages; ni++)
     {
+        imLeft = cv::imread(vstrImageLeft[ni], cv::IMREAD_UNCHANGED);
+        imRight = cv::imread(vstrImageRight[ni], cv::IMREAD_UNCHANGED); 
 
-        // Seq loop
-        double t_resize = 0;
-        double t_rect = 0;
-        double t_track = 0;
-        int num_rect = 0;
-        int proccIm = 0;
-        for(int ni=0; ni<nImages[seq]; ni++, proccIm++)
+        if(imLeft.empty())
         {
-            // Read left and right images from file
-            imLeft = cv::imread(vstrImageLeft[seq][ni],cv::IMREAD_UNCHANGED); //,cv::IMREAD_UNCHANGED);
-            imRight = cv::imread(vstrImageRight[seq][ni],cv::IMREAD_UNCHANGED); //,cv::IMREAD_UNCHANGED);
-
-            if(imLeft.empty())
-            {
-                cerr << endl << "Failed to load image at: "
-                     << string(vstrImageLeft[seq][ni]) << endl;
-                return 1;
-            }
-
-            if(imRight.empty())
-            {
-                cerr << endl << "Failed to load image at: "
-                     << string(vstrImageRight[seq][ni]) << endl;
-                return 1;
-            }
-
-            double tframe = vTimestampsCam[seq][ni];
-            std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
-
-            // Pass the images to the SLAM system
-            SLAM.TrackStereo(imLeft,imRight,tframe, vector<ORB_SLAM3::IMU::Point>(), vstrImageLeft[seq][ni]);
-
-            std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
-            double ttrack= std::chrono::duration_cast<std::chrono::duration<double> >(t2 - t1).count();
-			
-			Publish(SLAM, pub_pts_and_pose, pub_all_kf_and_pts, pub_cloud, ni);
-
-            vTimesTrack[ni]=ttrack;
-            // Wait to load the next frame
-            double T=0;
-            if(ni<nImages[seq]-1)
-                T = vTimestampsCam[seq][ni+1]-tframe;
-            else if(ni>0)
-                T = tframe-vTimestampsCam[seq][ni-1];
-            if(ttrack<T)
-                usleep((T-ttrack)*1e6); // 1e6
-
-            ros::spinOnce();
-			// loop_rate.sleep();
-			if (!ros::ok()){ break; }
+            cerr << endl << "Failed to load image at: "
+                    << string(vstrImageLeft[ni]) << endl;
+            return 1;
         }
 
-        if(seq < num_seq - 1)
+        if(imRight.empty())
         {
-            cout << "Changing the dataset" << endl;
-
-            SLAM.ChangeDataset();
+            cerr << endl << "Failed to load image at: "
+                    << string(vstrImageRight[ni]) << endl;
+            return 1;
         }
 
+        double tframe = vTimestamps[ni];
+        std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+
+        // Pass the images to the SLAM system
+        SLAM.TrackStereo(imLeft,imRight,tframe, vector<ORB_SLAM3::IMU::Point>(), vstrImageLeft[ni]);
+
+        std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+        double ttrack= std::chrono::duration_cast<std::chrono::duration<double> >(t2 - t1).count();
+        
+        Publish(SLAM, pub_pts_and_pose, pub_all_kf_and_pts, pub_cloud, pub_camera_pose, ni);
+
+        vTimestamps[ni]=ttrack;
+        double T=0;
+        if(ni<nImages-1)
+            T = vTimestamps[ni+1]-tframe;
+        else if(ni>0)
+            T = tframe-vTimestamps[ni-1];
+        if(ttrack<T)
+            usleep((T-ttrack)*1e6);
+
+        ros::spinOnce();
+        // loop_rate.sleep();
+        if (!ros::ok()){ break; }
     }
+
     // Stop all threads
     SLAM.Shutdown();
 
@@ -194,12 +165,13 @@ int main(int argc, char **argv)
 }
 
 void Publish(ORB_SLAM3::System &SLAM, ros::Publisher &pub_pts_and_pose,
-	ros::Publisher &pub_all_kf_and_pts, ros::Publisher &pub_cloud, int frame_id) {
-
-	if (all_pts_pub_gap > 0 && pub_count >= all_pts_pub_gap) {
-		pub_all_pts = true;
-		pub_count = 0;
-	}
+	ros::Publisher &pub_all_kf_and_pts, ros::Publisher &pub_cloud, 
+	ros::Publisher &pub_camera_pose, int frame_id) 
+{
+	// if (all_pts_pub_gap > 0 && pub_count >= all_pts_pub_gap) {
+	// 	pub_all_pts = true;
+	// 	pub_count = 0;
+	// }
 
 	if (pub_all_pts || SLAM.getLoopClosing()->loop_detected || SLAM.getTracker()->loop_detected) {
 
@@ -274,13 +246,6 @@ void Publish(ORB_SLAM3::System &SLAM, ros::Publisher &pub_pts_and_pose,
 
 		cv::Mat Trw = cv::Mat::eye(4, 4, CV_32F);
 
-		// If the reference keyframe was culled, traverse the spanning tree to get a suitable keyframe.
-		//while (pKF->isBad())
-		//{
-		//	Trw = Trw*pKF->mTcp;
-		//	pKF = pKF->GetParent();
-		//}
-
 		vector<ORB_SLAM3::KeyFrame*> vpKFs = SLAM.getMap()->GetAllKeyFrames();
 		sort(vpKFs.begin(), vpKFs.end(), ORB_SLAM3::KeyFrame::lId);
 
@@ -319,23 +284,20 @@ void Publish(ORB_SLAM3::System &SLAM, ros::Publisher &pub_pts_and_pose,
 		camera_pose.orientation.w = q[3];
 
 		pt_array.poses.push_back(camera_pose);
-
 		//printf("Done getting camera pose\n");
 
 		for (int pt_id = 1; pt_id <= n_map_pts; ++pt_id){
-
+			
+			// point is bad
 			if (!map_points[pt_id - 1] || map_points[pt_id - 1]->isBad()) {
-				//printf("Point %d is bad\n", pt_id);
 				continue;
 			}
 			cv::Mat wp = ORB_SLAM3::Converter::toCvMat(map_points[pt_id - 1]->GetWorldPos());
 
 			if (wp.empty()) {
-				//printf("World position for point %d is empty\n", pt_id);
 				continue;
 			}
 			geometry_msgs::Pose curr_pt;
-			//printf("wp size: %d, %d\n", wp.rows, wp.cols);
 			pcl_cloud->push_back(pcl::PointXYZ(wp.at<float>(0), wp.at<float>(1), wp.at<float>(2)));
 			curr_pt.position.x = wp.at<float>(0);
 			curr_pt.position.y = wp.at<float>(1);
@@ -349,14 +311,11 @@ void Publish(ORB_SLAM3::System &SLAM, ros::Publisher &pub_pts_and_pose,
 		ros_cloud.header.frame_id = "1";
 		ros_cloud.header.seq = frame_id + 1;
 
-		//printf("valid map pts: %lu\n", pt_array.poses.size()-1);
-
-		//printf("ros_cloud size: %d x %d\n", ros_cloud.height, ros_cloud.width);
 		pub_cloud.publish(ros_cloud);
 		pt_array.header.frame_id = "1";
 		pt_array.header.seq = frame_id + 1;
 		pub_pts_and_pose.publish(pt_array);
-		//pub_kf.publish(camera_pose);
+		pub_camera_pose.publish(camera_pose);
 	}
 }
 
@@ -366,9 +325,9 @@ void LoadImages(const string &strPathLeft, const string &strPathRight, const str
 {
     ifstream fTimes;
     fTimes.open(strPathTimes.c_str());
-    vTimeStamps.reserve(5000);
-    vstrImageLeft.reserve(5000);
-    vstrImageRight.reserve(5000);
+    // vTimeStamps.reserve(5000);
+    // vstrImageLeft.reserve(5000);
+    // vstrImageRight.reserve(5000);
     while(!fTimes.eof())
     {
         string s;
@@ -384,5 +343,41 @@ void LoadImages(const string &strPathLeft, const string &strPathRight, const str
             vTimeStamps.push_back(t/1e9);
 
         }
+    }
+}
+
+void LoadImages(const string &strPathToSequence, vector<string> &vstrImageLeft,
+                vector<string> &vstrImageRight, vector<double> &vTimestamps)
+{
+    ifstream fTimes;
+    string strPathTimeFile = strPathToSequence + "/times.txt";
+    fTimes.open(strPathTimeFile.c_str());
+    while(!fTimes.eof())
+    {
+        string s;
+        getline(fTimes,s);
+        if(!s.empty())
+        {
+            stringstream ss;
+            ss << s;
+            double t;
+            ss >> t;
+            vTimestamps.push_back(t);
+        }
+    }
+
+    string strPrefixLeft = strPathToSequence + "/image_0/";
+    string strPrefixRight = strPathToSequence + "/image_1/";
+
+    const int nTimes = vTimestamps.size();
+    vstrImageLeft.resize(nTimes);
+    vstrImageRight.resize(nTimes);
+
+    for(int i=0; i<nTimes; i++)
+    {
+        stringstream ss;
+        ss << setfill('0') << setw(6) << i;
+        vstrImageLeft[i] = strPrefixLeft + ss.str() + ".png";
+        vstrImageRight[i] = strPrefixRight + ss.str() + ".png";
     }
 }

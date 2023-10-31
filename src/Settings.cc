@@ -552,16 +552,15 @@ namespace ORB_SLAM3 {
 
         if(settings.sensor_ == System::STEREO || settings.sensor_ == System::IMU_STEREO){
             output << "\t-Camera 2 parameters (";
-            if(settings.cameraType_ == Settings::PinHole || settings.cameraType_ ==  Settings::Rectified){
-                output << "Pinhole";
-            }
-            else{
-                output << "Kannala-Brandt";
-            }
-            output << "" << ": [";
+        if (settings.cameraType_ == Settings::PinHole) {
             for(size_t i = 0; i < settings.originalCalib2_->size(); i++){
                 output << " " << settings.originalCalib2_->getParameter(i);
             }
+        } else if (settings.cameraType_ == Settings::Rectified) {
+            for (size_t i = 0; i < settings.originalCalib1_->size(); i++) {
+                output << " " << settings.originalCalib1_->getParameter(i);
+            }
+        }
             output << " ]" << endl;
 
             if(!settings.vPinHoleDistorsion2_.empty()){

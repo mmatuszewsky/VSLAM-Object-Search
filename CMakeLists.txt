@@ -100,7 +100,6 @@ src/GeometricTools.cc
 src/TwoViewReconstruction.cc
 src/Config.cc
 src/Settings.cc
-src/GridMap.cc
 include/System.h
 include/Tracking.h
 include/LocalMapping.h
@@ -131,7 +130,7 @@ include/TwoViewReconstruction.h
 include/SerializationUtils.h
 include/Config.h
 include/Settings.h
-include/GridMap.h)
+)
 
 add_subdirectory(Thirdparty/g2o)
 

@@ -31,6 +31,9 @@ using namespace std;
 void LoadImages(const string &strPathToSequence, vector<string> &vstrImageLeft,
                 vector<string> &vstrImageRight, vector<double> &vTimestamps);
 
+
+// ./stereo_kitti /home/meciek/VSLAM-Object-Search/Vocabulary/ORBvoc.txt /home/meciek/VSLAM-Object-Search/Examples/Stereo/KITTI00-02.yaml /home/meciek/Downloads/kitti/01
+
 int main(int argc, char **argv)
 {
     if(argc != 4)
