@@ -28,7 +28,44 @@
 
 using namespace std;
 
-// ./stereo_video /home/meciek/ORB_SLAM3/Vocabulary/ORBvoc.txt /home/meciek/ORB_SLAM3/Examples/Stereo/IMX219.yaml /home/meciek/slambook2/ch14/app/videos
+// ./stereo_video /home/meciek/VSLAM-Object-Search/Vocabulary/ORBvoc.txt /home/meciek/VSLAM-Object-Search/Examples/Stereo/IMX219.yaml /home/meciek/Downloads/tour_de_708b
+// ./stereo_video /home/meciek/VSLAM-Object-Search/Vocabulary/ORBvoc.txt /home/meciek/VSLAM-Object-Search/Examples/Stereo/EuRoC.yaml /home/meciek/Downloads/V1_01_easy /home/meciek/VSLAM-Object-Search/Examples/Stereo/EuRoC_TimeStamps/V101.txt
+
+// ./stereo_video /home/meciek/VSLAM-Object-Search/Vocabulary/ORBvoc.txt /home/meciek/VSLAM-Object-Search/Examples/Stereo/oak-d.yaml /home/meciek/Downloads/oakd
+
+
+void calculate()
+{
+        cv::Mat camera_matrix_left = cv::Mat::zeros(3, 3, CV_32F);
+        cv::Mat distortion_l = cv::Mat::zeros(1, 5, CV_32F);
+        cv::Mat rect_l = cv::Mat::zeros(3, 3, CV_32F);
+        cv::Mat project_l = cv::Mat::zeros(3, 4, CV_32F);
+
+        cv::Mat camera_matrix_right = cv::Mat::zeros(3, 3, CV_32F);
+        cv::Mat distortion_r = cv::Mat::zeros(1, 5, CV_32F);
+        cv::Mat rect_r = cv::Mat::zeros(3, 3, CV_32F);
+        cv::Mat project_r = cv::Mat::zeros(3, 4, CV_32F);
+
+        cv::Mat M = cv::Mat::zeros(4, 4, CV_32F);
+
+        cv::FileStorage fs("/home/meciek/VSLAM-Object-Search/Examples/Stereo/test.yaml", cv::FileStorage::READ);
+        fs["camera_matrix_left"] >> camera_matrix_left;
+        fs["distortion_l"] >> distortion_l;
+        fs["rectification_l"] >> rect_l;
+        fs["projection_l"] >> project_l;
+
+        fs["camera_matrix_right"] >> camera_matrix_right;
+        fs["distortion_r"] >> distortion_r;
+        fs["rectification_r"] >> rect_r;
+        fs["projection_r"] >> project_r;
+
+        M = rect_r * camera_matrix_right.inv() * rect_l * camera_matrix_left.inv() * project_l;
+
+        cout << M << endl;
+
+        fs.release();
+};
+
 
 int main(int argc, char **argv)
 {
@@ -38,18 +75,24 @@ int main(int argc, char **argv)
         return 1;
     }
 
+//     calculate();
+//     return 1;
+
     cout << "Initializing video inputs from " << argv[3] << endl;
 
-    // string leftFile = string(argv[3]) + "/left.mkv";
-    // string rightFile = string(argv[3]) + "/right.mkv";
+    string leftFile = string(argv[3]) + "/left.mp4";
+    string rightFile = string(argv[3]) + "/right.mp4";
 
     // cout << leftFile << " | " << rightFile << endl;
 
     // cv::VideoCapture capLeft(leftFile, cv::IMREAD_UNCHANGED);
     // cv::VideoCapture capRight(rightFile, cv::IMREAD_UNCHANGED);
 
-    cv::VideoCapture capLeft("/home/meciek/IMX219-83-Stereo-Demo-V2/18-load-videos/videos/left.mkv");
-    cv::VideoCapture capRight("/home/meciek/IMX219-83-Stereo-Demo-V2/18-load-videos/videos/right.mkv");
+//     cv::VideoCapture capLeft("/home/meciek/IMX219-83-Stereo-Demo-V2/18-load-videos/videos/left.mkv");
+//     cv::VideoCapture capRight("/home/meciek/IMX219-83-Stereo-Demo-V2/18-load-videos/videos/right.mkv");
+
+    cv::VideoCapture capLeft(leftFile);
+    cv::VideoCapture capRight(rightFile);
 
     if (!capLeft.isOpened() || !capRight.isOpened()) {
         cerr << "Error: Could not open one or both videos." << endl;
@@ -58,7 +101,7 @@ int main(int argc, char **argv)
 
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
     cout << "Creating VSLAM System ..." << endl;
-    ORB_SLAM3::System SLAM(argv[1], argv[2], ORB_SLAM3::System::STEREO,true);
+    ORB_SLAM3::System SLAM(argv[1], argv[2], ORB_SLAM3::System::STEREO, true);
     float imageScale = SLAM.GetImageScale();
 
     double t_track = 0.f;
@@ -74,6 +117,9 @@ int main(int argc, char **argv)
 
         capLeft.read(imLeft);
         capRight.read(imRight);
+
+        // cv::fastNlMeansDenoisingColored(imLeft2, imLeft, 10, 10, 7, 21);
+        // cv::fastNlMeansDenoisingColored(imRight2, imRight, 10, 10, 7, 21);
 
         if(imLeft.empty() || imRight.empty())
         {

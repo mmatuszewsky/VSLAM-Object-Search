@@ -190,6 +190,10 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/Stereo)
 add_executable(publisher_node Examples/Stereo/ROS-Stereo/ros_stereo_pub.cc)
 target_link_libraries(publisher_node ${PROJECT_NAME})
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/Stereo)
+add_executable(publisher_video_node Examples/Stereo/ROS-Stereo/ros_stereo_video_pub.cc)
+target_link_libraries(publisher_video_node ${PROJECT_NAME})
+
 add_executable(subscriber_node Examples/Stereo/ROS-Stereo/ros_stereo_sub.cc)
 target_link_libraries(subscriber_node ${PROJECT_NAME} ${PCL_LIBRARIES})
 

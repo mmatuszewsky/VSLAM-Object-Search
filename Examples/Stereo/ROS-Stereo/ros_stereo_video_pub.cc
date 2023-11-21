@@ -42,31 +42,11 @@
 
 using namespace std;
 
-void LoadImages(const string &strPathLeft, const string &strPathRight, const string &strPathTimes,
-                vector<string> &vstrImageLeft, vector<string> &vstrImageRight, vector<double> &vTimeStamps);
-
-void LoadImages(const string &strPathToSequence, vector<string> &vstrImageLeft,
-                vector<string> &vstrImageRight, vector<double> &vTimestamps);
-
 void Publish(ORB_SLAM3::System &SLAM, ros::Publisher &pub_pts_and_pose, ros::Publisher &pub_all_kf_and_pts, 
 	ros::Publisher &pub_cloud, ros::Publisher &pub_camera_pose, int frame_id);
 
-// ./publisher_node /home/meciek/VSLAM-Object-Search/Vocabulary/ORBvoc.txt /home/meciek/VSLAM-Object-Search/Examples/Stereo/EuRoC.yaml /home/meciek/Downloads/V1_01_easy /home/meciek/VSLAM-Object-Search/Examples/Stereo/EuRoC_TimeStamps/V101.txt
 
-// ./publisher_node /home/meciek/VSLAM-Object-Search/Vocabulary/ORBvoc.txt /home/meciek/VSLAM-Object-Search/Examples/Stereo/KITTI00-02.yaml /home/meciek/Downloads/kitti/01
-
-void PrintRamConumption() {
-	std::ifstream stat_stream("/proc/self/stat", std::ios_base::in);
-	if (stat_stream.is_open()) {
-		std::string dummy;
-		for (int i = 0; i < 22; ++i) {
-			stat_stream >> dummy;
-		}
-		unsigned long virtual_memory;
-		stat_stream >> virtual_memory;
-		std::cout << "Program is using approximately " << virtual_memory / (1024*1024) << " MB of virtual memory." << std::endl;
-	}
-}
+// ./publisher_video_node /home/meciek/VSLAM-Object-Search/Vocabulary/ORBvoc.txt /home/meciek/VSLAM-Object-Search/Examples/Stereo/oak-d.yaml /home/meciek/Downloads/oakd
 
 bool read_from_topic = false; 
 bool read_from_camera = false;
@@ -81,36 +61,31 @@ int main(int argc, char **argv)
 	ros::init(argc, argv, "Stereo");
 	ros::start();
 
-    if(argc < 4 && argc > 6)
+	if(argc != 4)
     {
-        cerr << endl << "Wrong command!" << endl;
+        cerr << endl << "Usage: ./stereo_video path_to_vocabulary path_to_settings path_to_videos" << endl;
         return 1;
     }
 
-    vector<string> vstrImageLeft;
-    vector<string> vstrImageRight;
-    vector<double> vTimestamps;
+    cout << "Initializing video inputs from " << argv[3] << endl;
 
-    if (argc == 4) {
-        LoadImages(string(argv[3]), vstrImageLeft, vstrImageRight, vTimestamps);
+    string leftFile = string(argv[3]) + "/left.mp4";
+    string rightFile = string(argv[3]) + "/right.mp4";
+
+    cv::VideoCapture capLeft(leftFile);
+    cv::VideoCapture capRight(rightFile);
+
+    if (!capLeft.isOpened() || !capRight.isOpened()) {
+        cerr << "Error: Could not open one or both videos." << endl;
+        return -1;
     }
-    else {
-        string pathSeq(argv[3]);
-        string pathTimeStamps(argv[4]);
 
-        string pathCam0 = pathSeq + "/mav0/cam0/data";
-        string pathCam1 = pathSeq + "/mav0/cam1/data";
-
-        LoadImages(pathCam0, pathCam1, pathTimeStamps, vstrImageLeft, vstrImageRight, vTimestamps);
-    }
-    const int nImages = vstrImageLeft.size();
-
-    cout << "LOADED!" << endl;
-    cout << endl << "-------" << endl;
-    cout.precision(17);
+    // Create SLAM system. It initializes all system threads and gets ready to process frames.
+    cout << "Creating VSLAM System ..." << endl;
 
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
     ORB_SLAM3::System SLAM(argv[1], argv[2], ORB_SLAM3::System::STEREO, true);
+	float imageScale = SLAM.GetImageScale();
 
     // ROS section
 	ros::NodeHandle nodeHandler;
@@ -128,53 +103,37 @@ int main(int argc, char **argv)
     double t_track = 0;
     int num_rect = 0;
     
-    for (int ni = 0; ni < nImages; ni++)
-    {
-        imLeft = cv::imread(vstrImageLeft[ni], cv::IMREAD_UNCHANGED);
-        imRight = cv::imread(vstrImageRight[ni], cv::IMREAD_UNCHANGED); 
+    while (capLeft.isOpened() && capRight.isOpened()) {
 
-        if(imLeft.empty())
+        capLeft.read(imLeft);
+        capRight.read(imRight);
+
+        if(imLeft.empty() || imRight.empty())
         {
-            cerr << endl << "Failed to load image at: "
-                    << string(vstrImageLeft[ni]) << endl;
+            cerr << endl << "Failed to load image! " << endl;
             return 1;
         }
 
-        if(imRight.empty())
+        if(imageScale != 1.f)
         {
-            cerr << endl << "Failed to load image at: "
-                    << string(vstrImageRight[ni]) << endl;
-            return 1;
+            int width = imLeft.cols * imageScale;
+            int height = imLeft.rows * imageScale;
+            cv::resize(imLeft, imLeft, cv::Size(width, height));
+            cv::resize(imRight, imRight, cv::Size(width, height));
         }
 
-        double tframe = vTimestamps[ni];
         std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
 
         // Pass the images to the SLAM system
-        SLAM.TrackStereo(imLeft,imRight,tframe, vector<ORB_SLAM3::IMU::Point>(), vstrImageLeft[ni]);
+        SLAM.TrackStereo(imLeft, imRight, 0.0);
 
-    	size_t sizeInMegaBytes = static_cast<double>(SLAM.GetTrackedMapPoints().size() * sizeof(*SLAM.GetTrackedMapPoints()[0])) / (1024 * 1024);
-		// cout << "Number of tracked map_points: " << SLAM.GetTrackedMapPoints().size() << ", size in [MB]: " << sizeInMegaBytes << endl;
+		Publish(SLAM, pub_pts_and_pose, pub_all_kf_and_pts, pub_cloud, pub_camera_pose, 0);
 
         std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
-        double ttrack= std::chrono::duration_cast<std::chrono::duration<double> >(t2 - t1).count();
-        
-        Publish(SLAM, pub_pts_and_pose, pub_all_kf_and_pts, pub_cloud, pub_camera_pose, ni);
 
-        vTimestamps[ni]=ttrack;
-        double T=0;
-        if(ni<nImages-1)
-            T = vTimestamps[ni+1]-tframe;
-        else if(ni>0)
-            T = tframe-vTimestamps[ni-1];
-        if(ttrack<T)
-            usleep((T-ttrack)*1e6);
-
-        ros::spinOnce();
-        // loop_rate.sleep();
-        if (!ros::ok()){ break; }
-    }
-
+        // Wait to load the next frame
+        cv::waitKey(1);
+	}
     // Stop all threads
     SLAM.Shutdown();
 
@@ -335,68 +294,3 @@ void Publish(ORB_SLAM3::System &SLAM, ros::Publisher &pub_pts_and_pose,
 		pub_camera_pose.publish(camera_pose);
 	}
 }
-
-
-void LoadImages(const string &strPathLeft, const string &strPathRight, const string &strPathTimes,
-                vector<string> &vstrImageLeft, vector<string> &vstrImageRight, vector<double> &vTimeStamps)
-{
-    ifstream fTimes;
-    fTimes.open(strPathTimes.c_str());
-    // vTimeStamps.reserve(5000);
-    // vstrImageLeft.reserve(5000);
-    // vstrImageRight.reserve(5000);
-    while(!fTimes.eof())
-    {
-        string s;
-        getline(fTimes,s);
-        if(!s.empty())
-        {
-            stringstream ss;
-            ss << s;
-            vstrImageLeft.push_back(strPathLeft + "/" + ss.str() + ".png");
-            vstrImageRight.push_back(strPathRight + "/" + ss.str() + ".png");
-            double t;
-            ss >> t;
-            vTimeStamps.push_back(t/1e9);
-
-        }
-    }
-}
-
-void LoadImages(const string &strPathToSequence, vector<string> &vstrImageLeft,
-                vector<string> &vstrImageRight, vector<double> &vTimestamps)
-{
-    ifstream fTimes;
-    string strPathTimeFile = strPathToSequence + "/times.txt";
-    fTimes.open(strPathTimeFile.c_str());
-    while(!fTimes.eof())
-    {
-        string s;
-        getline(fTimes,s);
-        if(!s.empty())
-        {
-            stringstream ss;
-            ss << s;
-            double t;
-            ss >> t;
-            vTimestamps.push_back(t);
-        }
-    }
-
-    string strPrefixLeft = strPathToSequence + "/image_0/";
-    string strPrefixRight = strPathToSequence + "/image_1/";
-
-    const int nTimes = vTimestamps.size();
-    vstrImageLeft.resize(nTimes);
-    vstrImageRight.resize(nTimes);
-
-    for(int i=0; i<nTimes; i++)
-    {
-        stringstream ss;
-        ss << setfill('0') << setw(6) << i;
-        vstrImageLeft[i] = strPrefixLeft + ss.str() + ".png";
-        vstrImageRight[i] = strPrefixRight + ss.str() + ".png";
-    }
-}
-
-
