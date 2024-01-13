@@ -1,0 +1,17 @@
+{
+    "scale_factor": 1,
+    "resize_factor": 100,
+    "cloud_max_x": 1500,
+    "cloud_min_x": -1500.0,
+    "cloud_max_z": 1500,
+    "cloud_min_z": -1500,
+    "free_thresh": 0.75,
+    "occupied_thresh": 0.7,
+    "thresh_diff": 0.05,
+    "visit_thresh": 10,
+    "upper_left_x": -2.5,
+    "upper_left_y": -2.5,
+    "resolution": 10,
+    "use_local_counters": true,
+    "radius_size": 1000.0
+}
